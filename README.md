@@ -47,4 +47,140 @@ To see the php version you are using create info.php using command as:-
  
  ## Step 2 — Adjusting User Authentication and Privileges
  
+ ### Configuring Password Access for the MySQL Root Account
  
+ In order to log in to phpMyAdmin as your root MySQL user
+ ```
+ sudo mysql
+ ```
+ Next, check which authentication method each of your MySQL user accounts use with the following command:
+ ```
+ mysql>  SELECT user,authentication_string,plugin,host FROM mysql.user;
+ ```
+ 
+ In this example, you can see that the root user does in fact authenticate using the auth_socket plugin. To configure the root account to authenticate    with a password, run the following ALTER USER command. Be sure to change password to a strong password of your choosing:
+
+```
+mysql> ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY 'password';
+```
+
+However, some versions of PHP don’t work reliably with caching_sha2_password. PHP has reported that this issue was fixed as of PHP 7.4, but if you encounter an error when trying to log in to phpMyAdmin later on, you may want to set root to authenticate with mysql_native_password instead:
+
+```
+mysql> ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'password';
+```
+Then, check the authentication methods employed by each of your users again to confirm that root no longer authenticates using the auth_socket plugin:
+
+```
+mysql> SELECT user,authentication_string,plugin,host FROM mysql.user;
+```
+
+## Step 3 Configuring Password Access for a Dedicated MySQL User
+
+
+Alternatively, some may find that it better suits their workflow to connect to phpMyAdmin with a dedicated user.
+
+open up the MySQL shell once again:
+
+```
+sudo mysql
+
+mysql -u root -p
+```
+
+From there, create a new user and give it a strong password:
+```
+mysql> CREATE USER 'sammy'@'localhost' IDENTIFIED WITH caching_sha2_password BY 'password';
+```
+depending on what version of PHP you have installed, you may want to set your new user to authenticate with mysql_native_password instead of caching_sha2_password:
+```
+mysql> ALTER USER 'sammy'@'localhost' IDENTIFIED WITH mysql_native_password BY 'password';
+```
+
+Then, grant your new user appropriate privileges.
+```
+mysql> GRANT ALL PRIVILEGES ON *.* TO 'sammy'@'localhost' WITH GRANT OPTION;
+```
+
+You can now access the web interface by visiting your server’s domain name or public IP address followed by /phpmyadmin:
+```
+https://your_domain_or_IP/phpmyadmin
+```
+
+## Step 4 Securing Your phpMyAdmin Instance
+
+Use your preferred text editor to edit the phpmyadmin.conf file that has been placed in your Apache configuration directory. Here, we’ll use nano:
+```
+sudo nano /etc/apache2/conf-available/phpmyadmin.con
+```
+
+Add an AllowOverride All directive within the <Directory /usr/share/phpmyadmin> section of the configuration file, like this:
+
+/etc/apache2/conf-available/phpmyadmin.conf
+```
+<Directory /usr/share/phpmyadmin>
+    Options SymLinksIfOwnerMatch
+    DirectoryIndex index.php
+    AllowOverride All
+    . . .
+```
+
+In order for this to be successful, the file must be created within the application directory. You can create the necessary file and open it in your text editor with root privileges by typing:
+
+```
+sudo nano /usr/share/phpmyadmin/.htaccess
+```
+
+Within this file, enter the following information:
+
+```
+/usr/share/phpmyadmin/.htaccess
+AuthType Basic
+AuthName "Restricted Files"
+AuthUserFile /etc/phpmyadmin/.htpasswd
+Require valid-user
+```
+
+When you are finished, save and close the file.
+
+The location that you selected for your password file was /etc/phpmyadmin/.htpasswd. You can now create this file and pass it an initial user with the htpasswd utility:
+```
+sudo htpasswd -c /etc/phpmyadmin/.htpasswd username
+```
+
+You will be prompted to select and confirm a password for the user you are creating. Afterwards, the file is created with the hashed password that you entered.
+
+If you want to enter an additional user, you need to do so without the -c flag, like this:
+```
+sudo htpasswd /etc/phpmyadmin/.htpasswd additionaluser
+```
+
+Then restart Apache to put .htaccess authentication into effect:
+```
+sudo systemctl restart apache2
+```
+Now, when you access your phpMyAdmin subdirectory, you will be prompted for the additional account name and password that you just configured:
+```
+https://domain_name_or_IP/phpmyadmin
+```
+
+## Step 5  Restrict access to the phpMyAdmin by IP Address
+
+edit the phpmyadmin config file 
+
+```
+sudo nano /etc/apache2/conf-available/phpmyadmin.conf
+```
+add these code inside <Directory /usr/share/phpmyadmin>
+
+```
+#Restrict phpMyAdmin via IP address
+Order Deny,Allow
+Deny from All
+Allow from <your ip address>
+```
+Reset the apache service
+
+```
+sudo /etc/init.d/apache2 restart
+```
